@@ -173,3 +173,6 @@ test_env/
 venv/
 env/
 .venv/ 
+
+test_install_env/
+prod_test_env/
