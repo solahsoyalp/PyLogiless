@@ -209,3 +209,4 @@ env/
 
 test_install_env/
 prod_test_env/
+.pypirc
