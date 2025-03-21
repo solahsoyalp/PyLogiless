@@ -26,19 +26,17 @@ class TestLogilessClient:
         """
         テスト前の準備
         """
-        self.client_id = "test_client_id"
-        self.client_secret = "test_client_secret"
-        self.redirect_uri = "https://example.com/callback"
-        self.client = LogilessClient(self.client_id, self.client_secret, self.redirect_uri)
+        self.access_token = "test_access_token"
+        self.merchant_id = "test_merchant_id"
+        self.client = LogilessClient(self.access_token, self.merchant_id)
 
     def test_initialization(self):
         """
         クライアントの初期化をテスト
         """
         assert self.client.api_base_url == LogilessClient.API_BASE_URL
-        assert self.client.auth.client_id == self.client_id
-        assert self.client.auth.client_secret == self.client_secret
-        assert self.client.auth.redirect_uri == self.redirect_uri
+        assert self.client.auth.access_token == self.access_token
+        assert self.client.auth.merchant_id == self.merchant_id
 
         # リソースが正しく初期化されていることを確認
         assert self.client.article is not None
@@ -57,7 +55,7 @@ class TestLogilessClient:
         """
         custom_url = "https://staging.logiless.com/api"
         client = LogilessClient(
-            self.client_id, self.client_secret, self.redirect_uri, api_base_url=custom_url
+            self.access_token, self.merchant_id, api_base_url=custom_url
         )
         assert client.api_base_url == custom_url
 
@@ -75,7 +73,7 @@ class TestLogilessClient:
         # 期待される結果を検証
         assert result == {"id": "123", "name": "テスト商品"}
         mock_request.assert_called_once_with(
-            "GET", f"{self.client.api_base_url}/article/123", params={}
+            "GET", f"{self.client.api_base_url}/merchant/{self.client.auth.merchant_id}/articles/123", params={}
         )
 
     @mock.patch.object(LogilessClient, "request")
@@ -98,7 +96,7 @@ class TestLogilessClient:
             "total": 2,
         }
         mock_request.assert_called_once_with(
-            "GET", f"{self.client.api_base_url}/article", params={"limit": 10, "offset": 0}
+            "GET", f"{self.client.api_base_url}/merchant/{self.client.auth.merchant_id}/articles", params={"limit": 10, "offset": 0}
         )
 
     @mock.patch.object(LogilessClient, "request")
@@ -116,7 +114,7 @@ class TestLogilessClient:
         # 期待される結果を検証
         assert result == {"id": "123", "name": "新商品"}
         mock_request.assert_called_once_with(
-            "POST", f"{self.client.api_base_url}/article", json=data
+            "POST", f"{self.client.api_base_url}/merchant/{self.client.auth.merchant_id}/articles", json=data
         )
 
     @mock.patch.object(LogilessClient, "request")
@@ -134,7 +132,7 @@ class TestLogilessClient:
         # 期待される結果を検証
         assert result == {"id": "123", "name": "更新商品"}
         mock_request.assert_called_once_with(
-            "PUT", f"{self.client.api_base_url}/article/123", json=data
+            "PUT", f"{self.client.api_base_url}/merchant/{self.client.auth.merchant_id}/articles/123", json=data
         )
 
     @mock.patch.object(LogilessClient, "request")
@@ -151,7 +149,7 @@ class TestLogilessClient:
         # 期待される結果を検証
         assert result == {"success": True}
         mock_request.assert_called_once_with(
-            "DELETE", f"{self.client.api_base_url}/article/123"
+            "DELETE", f"{self.client.api_base_url}/merchant/{self.client.auth.merchant_id}/articles/123"
         )
 
     @mock.patch("requests.request")

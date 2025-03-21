@@ -117,7 +117,7 @@ class ArticleResource(APIResource):
         Args:
             client (LogilessClient): LogilessClientインスタンス
         """
-        super().__init__(client, "article")
+        super().__init__(client, f"merchant/{client.auth.merchant_id}/articles")
 
 
 class ActualInventorySummaryResource(APIResource):
@@ -132,7 +132,7 @@ class ActualInventorySummaryResource(APIResource):
         Args:
             client (LogilessClient): LogilessClientインスタンス
         """
-        super().__init__(client, "actual_inventory_summary")
+        super().__init__(client, f"merchant/{client.auth.merchant_id}/actual_inventory_summaries")
 
 
 class LogicalInventorySummaryResource(APIResource):
@@ -147,7 +147,7 @@ class LogicalInventorySummaryResource(APIResource):
         Args:
             client (LogilessClient): LogilessClientインスタンス
         """
-        super().__init__(client, "logical_inventory_summary")
+        super().__init__(client, f"merchant/{client.auth.merchant_id}/logical_inventory_summaries")
 
 
 class OutboundDeliveryResource(APIResource):
@@ -162,7 +162,7 @@ class OutboundDeliveryResource(APIResource):
         Args:
             client (LogilessClient): LogilessClientインスタンス
         """
-        super().__init__(client, "outbound_delivery")
+        super().__init__(client, f"merchant/{client.auth.merchant_id}/outbound_deliveries")
 
 
 class InboundDeliveryResource(APIResource):
@@ -177,7 +177,7 @@ class InboundDeliveryResource(APIResource):
         Args:
             client (LogilessClient): LogilessClientインスタンス
         """
-        super().__init__(client, "inbound_delivery")
+        super().__init__(client, f"merchant/{client.auth.merchant_id}/inbound_deliveries")
 
 
 class SalesOrderResource(APIResource):
@@ -192,7 +192,7 @@ class SalesOrderResource(APIResource):
         Args:
             client (LogilessClient): LogilessClientインスタンス
         """
-        super().__init__(client, "sales_order")
+        super().__init__(client, f"merchant/{client.auth.merchant_id}/sales_orders")
 
 
 class WarehouseResource(APIResource):
@@ -207,7 +207,7 @@ class WarehouseResource(APIResource):
         Args:
             client (LogilessClient): LogilessClientインスタンス
         """
-        super().__init__(client, "warehouse")
+        super().__init__(client, f"merchant/{client.auth.merchant_id}/warehouses")
 
 
 class StoreResource(APIResource):
@@ -222,7 +222,7 @@ class StoreResource(APIResource):
         Args:
             client (LogilessClient): LogilessClientインスタンス
         """
-        super().__init__(client, "store")
+        super().__init__(client, f"merchant/{client.auth.merchant_id}/stores")
 
 
 class LocationResource(APIResource):
@@ -236,7 +236,7 @@ class LocationResource(APIResource):
         Args:
             client (LogilessClient): LogilessClientインスタンス
         """
-        super().__init__(client, "location")
+        super().__init__(client, f"merchant/{client.auth.merchant_id}/locations")
 
 
 class ReorderPointResource(APIResource):
@@ -250,7 +250,7 @@ class ReorderPointResource(APIResource):
         Args:
             client (LogilessClient): LogilessClientインスタンス
         """
-        super().__init__(client, "reorder_point")
+        super().__init__(client, f"merchant/{client.auth.merchant_id}/reorder_points")
 
 
 class SupplierResource(APIResource):
@@ -264,7 +264,7 @@ class SupplierResource(APIResource):
         Args:
             client (LogilessClient): LogilessClientインスタンス
         """
-        super().__init__(client, "supplier")
+        super().__init__(client, f"merchant/{client.auth.merchant_id}/suppliers")
 
 
 class ArticleMapResource(APIResource):
@@ -278,7 +278,7 @@ class ArticleMapResource(APIResource):
         Args:
             client (LogilessClient): LogilessClientインスタンス
         """
-        super().__init__(client, "article_map")
+        super().__init__(client, f"merchant/{client.auth.merchant_id}/article_maps")
 
 
 class DailyInventorySummaryResource(APIResource):
@@ -292,7 +292,7 @@ class DailyInventorySummaryResource(APIResource):
         Args:
             client (LogilessClient): LogilessClientインスタンス
         """
-        super().__init__(client, "daily_inventory_summary")
+        super().__init__(client, f"merchant/{client.auth.merchant_id}/daily_inventory_summaries")
 
 
 class TransactionLogResource(APIResource):
@@ -306,7 +306,7 @@ class TransactionLogResource(APIResource):
         Args:
             client (LogilessClient): LogilessClientインスタンス
         """
-        super().__init__(client, "transaction_log")
+        super().__init__(client, f"merchant/{client.auth.merchant_id}/transaction_logs")
 
 
 class InterWarehouseTransferResource(APIResource):
@@ -320,7 +320,7 @@ class InterWarehouseTransferResource(APIResource):
         Args:
             client (LogilessClient): LogilessClientインスタンス
         """
-        super().__init__(client, "inter_warehouse_transfer")
+        super().__init__(client, f"merchant/{client.auth.merchant_id}/inter_warehouse_transfers")
 
 
 class LogilessClient:
@@ -328,26 +328,24 @@ class LogilessClient:
     LOGILESS APIのクライアントクラス
     """
 
-    API_BASE_URL = "https://app2.logiless.com/api"
+    API_BASE_URL = "https://app2.logiless.com/api/v1"
 
     def __init__(
         self,
-        client_id: str,
-        client_secret: str,
-        redirect_uri: str,
+        access_token: str,
+        merchant_id: str,
         api_base_url: Optional[str] = None,
     ):
         """
         LogilessClientクラスの初期化
 
         Args:
-            client_id (str): OAuth2のクライアントID
-            client_secret (str): OAuth2のクライアントシークレット
-            redirect_uri (str): 認証後のリダイレクトURI
+            access_token (str): アクセストークン
+            merchant_id (str): マーチャントID
             api_base_url (Optional[str], optional): APIベースURL（テスト用など）
         """
         self.api_base_url = api_base_url or self.API_BASE_URL
-        self.auth = LogilessAuth(client_id, client_secret, redirect_uri)
+        self.auth = LogilessAuth(access_token, merchant_id)
 
         # APIリソースを初期化
         self.article = ArticleResource(self)
@@ -366,38 +364,6 @@ class LogilessClient:
         self.daily_inventory_summary = DailyInventorySummaryResource(self)
         self.transaction_log = TransactionLogResource(self)
         self.inter_warehouse_transfer = InterWarehouseTransferResource(self)
-
-    def get_authorization_url(self) -> str:
-        """
-        認証URLを取得する
-
-        Returns:
-            str: 認証URL
-        """
-        return self.auth.get_authorization_url()
-
-    def fetch_token(self, code: str) -> Dict[str, str]:
-        """
-        認可コードを使用してアクセストークンを取得する
-
-        Args:
-            code (str): 認証フローから取得した認可コード
-
-        Returns:
-            Dict[str, str]: トークン情報
-        """
-        return self.auth.fetch_token(code)
-
-    def set_token(self, access_token: str, refresh_token: str, expires_in: int = 2592000) -> None:
-        """
-        既存のアクセストークンとリフレッシュトークンを設定する
-
-        Args:
-            access_token (str): アクセストークン
-            refresh_token (str): リフレッシュトークン
-            expires_in (int, optional): トークンの有効期限（秒）
-        """
-        self.auth.set_token(access_token, refresh_token, expires_in)
 
     def request(
         self,
@@ -425,7 +391,7 @@ class LogilessClient:
         Raises:
             LogilessError: APIエラーが発生した場合
         """
-        # トークンが有効かチェックし、必要に応じて更新
+        # トークンが有効かチェック
         token_valid, error_message = self.auth.ensure_active_token()
         if not token_valid:
             raise LogilessError(error_message)
@@ -439,17 +405,12 @@ class LogilessClient:
             request_headers.update(headers)
 
         try:
-            # JSON本文がある場合、日本語文字をエスケープする
-            json_data = None
-            if json:
-                json_data = json
-
             # リクエスト実行
             response = requests.request(
                 method,
                 url,
                 params=params,
-                json=json_data,
+                json=json,
                 headers=request_headers,
                 files=files,
             )

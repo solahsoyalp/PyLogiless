@@ -2,7 +2,7 @@
 
 ## はじめに
 `pylogiless` は、LOGILESS APIをPythonコードから簡単に呼び出せるライブラリです。
-認証から各種リソース取得まで、短いコードで実装可能です。
+認証済みのアクセストークンとマーチャントIDを使用して、各種リソースにアクセスできます。
 
 ---
 
@@ -13,20 +13,14 @@ pip install pylogiless
 
 ---
 
-## 初期化と認証
+## 初期化
 ```python
 from pylogiless import LogilessClient
 
 client = LogilessClient(
-    client_id="YOUR_CLIENT_ID",
-    client_secret="YOUR_CLIENT_SECRET",
-    redirect_uri="YOUR_REDIRECT_URI"
+    access_token="YOUR_ACCESS_TOKEN",
+    merchant_id="YOUR_MERCHANT_ID"
 )
-
-# 認可コードを取得後、トークンを取得
-code = "AUTH_CODE"
-token = client.fetch_token(code)
-print(token)
 ```
 
 ---
