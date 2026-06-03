@@ -2,17 +2,59 @@
 
 LOGILESS APIのPythonクライアントライブラリ。在庫管理や物流管理のためのAPIを簡単に利用できるようにします。
 
+## 認証
+
+本ライブラリは2通りの認証方式をサポートします。いずれの場合も認証ヘッダには
+`Authorization: Bearer <access_token>` のみが付与され、マーチャントIDはURLパスに含まれます。
+
+**1. 静的アクセストークン方式（既定）**
+
+事前に発行したアクセストークン (`access_token`) とマーチャントID (`merchant_id`) を
+`LogilessClient` に渡します。
+
+```python
+client = LogilessClient(access_token="YOUR_TOKEN", merchant_id="YOUR_MERCHANT_ID")
+```
+
+**2. OAuth2 認可コードフロー方式**
+
+`client_id` / `client_secret` / `redirect_uri` を渡すと、認可URLの生成・認可コードからの
+トークン取得・期限切れ時のリフレッシュトークンによる自動更新が利用できます。
+
+```python
+client = LogilessClient(
+    merchant_id="YOUR_MERCHANT_ID",
+    client_id="YOUR_CLIENT_ID",
+    client_secret="YOUR_CLIENT_SECRET",
+    redirect_uri="https://example.com/callback",
+)
+# 1) 認可URLへユーザーを誘導
+url = client.auth.get_authorization_url()
+# 2) 返ってきた認可コードをトークンに交換
+client.auth.fetch_token("AUTHORIZATION_CODE")
+# 以降のAPI呼び出しでは、期限切れ時に refresh_token で自動更新されます
+```
+
 ## 機能
 
-- 実在庫サマリAPI
-  - 商品の実際の在庫状況の取得
-  - 倉庫やロケーションごとの在庫情報の取得
-- 論理在庫サマリAPI
-  - 商品の論理的な在庫状況の取得
-  - 在庫切れや再発注レベルの情報の取得
-- 商品一覧API
-  - 商品の基本情報の取得
-  - 商品タイプ、税表示、温度管理などの設定情報の取得
+以下のリソースを `client.<resource>` 経由で操作できます。
+
+- 受注 (sales_order)
+- 受注返品 (sales_return)
+- 出荷 (outbound_delivery)
+- 入荷 (inbound_delivery)
+- 倉庫間移動 (inter_warehouse_transfer)
+- 商品 (article)
+- 商品マップ (article_map)
+- サプライヤ (supplier)
+- 店舗 (store)
+- 倉庫 (warehouse)
+- ロケーション (location)
+- 再注文点 (reorder_point)
+- 実在庫サマリ (actual_inventory_summary)
+- 論理在庫サマリ (logical_inventory_summary)
+- 日次在庫サマリ (daily_inventory_summary)
+- 取引ログ (transaction_log)
 
 ## インストール
 

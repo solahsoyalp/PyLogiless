@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="pylogiless",
-    version="0.2.0",
+    version="0.2.1",
     author="LOGILESS API Python Client Contributors",
     author_email="contact@logiless.jp",
     description="Python client for the LOGILESS API",
@@ -29,6 +29,18 @@ setup(
         "requests>=2.31.0",
         "python-dotenv>=1.0.0",
     ],
+    extras_require={
+        "dev": [
+            "pytest>=7",
+            "pytest-cov>=4",
+            "coverage>=7",
+        ],
+        "test": [
+            "pytest>=7",
+            "pytest-cov>=4",
+            "coverage>=7",
+        ],
+    },
     keywords="logiless, api, logistics, inventory, warehouse",
     project_urls={
         "Bug Tracker": "https://github.com/logiless/pylogiless/issues",

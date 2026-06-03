@@ -45,6 +45,7 @@ class TestLogilessClient:
         assert self.client.outbound_delivery is not None
         assert self.client.inbound_delivery is not None
         assert self.client.sales_order is not None
+        assert self.client.sales_return is not None
         assert self.client.warehouse is not None
         assert self.client.store is not None
         assert self.client.location is not None
@@ -97,6 +98,31 @@ class TestLogilessClient:
         }
         mock_request.assert_called_once_with(
             "GET", f"{self.client.api_base_url}/merchant/{self.client.auth.merchant_id}/articles", params={"limit": 10, "offset": 0}
+        )
+
+    @mock.patch.object(LogilessClient, "request")
+    def test_sales_return_list(self, mock_request):
+        """
+        受注返品(SalesReturn)リソースのlist()メソッドをテスト
+        """
+        # モックの設定
+        mock_request.return_value = {
+            "items": [{"id": "1", "code": "RET001"}],
+            "total": 1,
+        }
+
+        # テスト対象の関数を呼び出し
+        result = self.client.sales_return.list(limit=10, offset=0)
+
+        # 期待される結果を検証
+        assert result == {
+            "items": [{"id": "1", "code": "RET001"}],
+            "total": 1,
+        }
+        mock_request.assert_called_once_with(
+            "GET",
+            f"{self.client.api_base_url}/merchant/{self.client.auth.merchant_id}/sales_returns",
+            params={"limit": 10, "offset": 0},
         )
 
     @mock.patch.object(LogilessClient, "request")

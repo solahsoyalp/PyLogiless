@@ -14,6 +14,8 @@ pip install pylogiless
 ---
 
 ## 初期化
+
+### 静的アクセストークン方式（既定）
 ```python
 from pylogiless import LogilessClient
 
@@ -21,6 +23,30 @@ client = LogilessClient(
     access_token="YOUR_ACCESS_TOKEN",
     merchant_id="YOUR_MERCHANT_ID"
 )
+```
+
+### OAuth2 認可コードフロー方式
+`client_id` / `client_secret` / `redirect_uri` を渡すと、認可URLの生成・認可コードからの
+トークン取得・期限切れ時の自動リフレッシュが利用できます。
+```python
+from pylogiless import LogilessClient
+
+client = LogilessClient(
+    merchant_id="YOUR_MERCHANT_ID",
+    client_id="YOUR_CLIENT_ID",
+    client_secret="YOUR_CLIENT_SECRET",
+    redirect_uri="https://example.com/callback",
+)
+
+# 1) ユーザーを認可URLへ誘導
+auth_url = client.auth.get_authorization_url()
+print(auth_url)
+
+# 2) リダイレクトで受け取った認可コードをトークンに交換
+client.auth.fetch_token("AUTHORIZATION_CODE")
+
+# 以降は通常どおりAPIを呼び出せる（期限切れ時は refresh_token で自動更新）
+articles = client.article.list()
 ```
 
 ---
@@ -141,6 +167,17 @@ print(new_order)
 # 注文更新
 updated_order = client.sales_order.update("ORDER_ID", {"order_date": "2024-01-12"})
 print(updated_order)
+```
+
+## 受注返品(SalesReturn)操作
+```python
+# 受注返品一覧の取得
+sales_returns = client.sales_return.list(limit=10)
+print(sales_returns)
+
+# 特定の受注返品データの取得
+sales_return = client.sales_return.get("SALES_RETURN_ID")
+print(sales_return)
 ```
 
 ## その他の機能

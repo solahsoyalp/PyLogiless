@@ -195,6 +195,21 @@ class SalesOrderResource(APIResource):
         super().__init__(client, f"merchant/{client.auth.merchant_id}/sales_orders")
 
 
+class SalesReturnResource(APIResource):
+    """
+    受注返品(SalesReturn)リソースを扱うクラス
+    """
+
+    def __init__(self, client: "LogilessClient"):
+        """
+        SalesReturnResourceクラスの初期化
+
+        Args:
+            client (LogilessClient): LogilessClientインスタンス
+        """
+        super().__init__(client, f"merchant/{client.auth.merchant_id}/sales_returns")
+
+
 class WarehouseResource(APIResource):
     """
     倉庫(Warehouse)リソースを扱うクラス
@@ -332,20 +347,41 @@ class LogilessClient:
 
     def __init__(
         self,
-        access_token: str,
-        merchant_id: str,
+        access_token: Optional[str] = None,
+        merchant_id: Optional[str] = None,
         api_base_url: Optional[str] = None,
+        *,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
+        redirect_uri: Optional[str] = None,
+        refresh_token: Optional[str] = None,
     ):
         """
         LogilessClientクラスの初期化
 
+        静的アクセストークン方式（access_token + merchant_id）と、
+        OAuth2 認可コードフロー方式（client_id / client_secret / redirect_uri /
+        refresh_token）の両方に対応します。OAuth2情報を渡した場合、トークンの
+        期限切れ時にリフレッシュトークンで自動更新されます。
+
         Args:
-            access_token (str): アクセストークン
-            merchant_id (str): マーチャントID
+            access_token (Optional[str]): アクセストークン
+            merchant_id (Optional[str]): マーチャントID
             api_base_url (Optional[str], optional): APIベースURL（テスト用など）
+            client_id (Optional[str], optional): OAuth2クライアントID
+            client_secret (Optional[str], optional): OAuth2クライアントシークレット
+            redirect_uri (Optional[str], optional): OAuth2リダイレクトURI
+            refresh_token (Optional[str], optional): リフレッシュトークン
         """
         self.api_base_url = api_base_url or self.API_BASE_URL
-        self.auth = LogilessAuth(access_token, merchant_id)
+        self.auth = LogilessAuth(
+            access_token,
+            merchant_id,
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri,
+            refresh_token=refresh_token,
+        )
 
         # APIリソースを初期化
         self.article = ArticleResource(self)
@@ -354,6 +390,7 @@ class LogilessClient:
         self.outbound_delivery = OutboundDeliveryResource(self)
         self.inbound_delivery = InboundDeliveryResource(self)
         self.sales_order = SalesOrderResource(self)
+        self.sales_return = SalesReturnResource(self)
         self.warehouse = WarehouseResource(self)
         self.store = StoreResource(self)
         self.location = LocationResource(self)

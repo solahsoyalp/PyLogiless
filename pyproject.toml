@@ -12,5 +12,12 @@ profile = "black"
 multi_line_output = 3
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = "test_*.py" 
+testpaths = ["pylogiless/tests"]
+python_files = "test_*.py"
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["pylogiless"]
+
+[tool.coverage.report]
+show_missing = true

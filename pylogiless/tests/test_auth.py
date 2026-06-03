@@ -1,13 +1,10 @@
 """
 認証モジュールのテスト
 """
-import json
 import time
 from unittest import mock
 
 import pytest
-import requests
-from requests.exceptions import HTTPError
 
 from pylogiless.api.auth import LogilessAuth
 
@@ -21,50 +18,127 @@ class TestLogilessAuth:
         """
         テスト前の準備
         """
+        self.access_token = "test_access_token"
+        self.merchant_id = "test_merchant_id"
+        self.auth = LogilessAuth(self.access_token, self.merchant_id)
+
+    def test_initialization(self):
+        """
+        アクセストークンとマーチャントIDで初期化できることをテスト
+        """
+        assert self.auth.access_token == self.access_token
+        assert self.auth.merchant_id == self.merchant_id
+
+    def test_get_auth_header(self):
+        """
+        認証ヘッダーが Authorization のみを返すことをテスト
+        """
+        header = self.auth.get_auth_header()
+
+        # Bearer トークンのみを含むことを検証
+        assert header == {"Authorization": f"Bearer {self.access_token}"}
+
+        # X-Merchant-ID ヘッダーを含まないことを検証
+        assert "X-Merchant-ID" not in header
+
+    def test_is_token_expired_without_token(self):
+        """
+        アクセストークンが未設定の場合は期限切れ(True)を返すことをテスト
+        """
+        self.auth.access_token = None
+        assert self.auth.is_token_expired() is True
+
+    def test_is_token_expired_with_token(self):
+        """
+        アクセストークンが設定済みの場合は期限切れでない(False)ことをテスト
+        """
+        self.auth.access_token = "test_access_token"
+        assert self.auth.is_token_expired() is False
+
+    def test_ensure_active_token_without_token(self):
+        """
+        アクセストークンが未設定の場合は (False, メッセージ) を返すことをテスト
+        """
+        self.auth.access_token = None
+        result, error = self.auth.ensure_active_token()
+
+        assert result is False
+        assert error == "アクセストークンが設定されていません"
+
+    def test_ensure_active_token_with_token(self):
+        """
+        アクセストークンが設定済みの場合は (True, None) を返すことをテスト
+        """
+        self.auth.access_token = "test_access_token"
+        result, error = self.auth.ensure_active_token()
+
+        assert result is True
+        assert error is None
+
+
+class TestLogilessAuthOAuth2:
+    """
+    OAuth2 認可コードフロー（ハイブリッド対応）のテストケース
+    """
+
+    def setup_method(self):
+        """
+        テスト前の準備
+        """
         self.client_id = "test_client_id"
         self.client_secret = "test_client_secret"
         self.redirect_uri = "https://example.com/callback"
-        self.auth = LogilessAuth(self.client_id, self.client_secret, self.redirect_uri)
+        self.auth = LogilessAuth(
+            client_id=self.client_id,
+            client_secret=self.client_secret,
+            redirect_uri=self.redirect_uri,
+        )
 
     def test_get_authorization_url(self):
         """
-        認証URLの生成をテスト
+        認可URLが正しく生成されることをテスト
         """
-        expected_url = f"{self.auth.AUTH_URL}?client_id={self.client_id}&response_type=code&redirect_uri={self.redirect_uri}"
-        assert self.auth.get_authorization_url() == expected_url
+        expected = (
+            f"{LogilessAuth.AUTH_URL}?client_id={self.client_id}"
+            f"&response_type=code&redirect_uri={self.redirect_uri}"
+        )
+        assert self.auth.get_authorization_url() == expected
+
+    def test_get_authorization_url_missing_params(self):
+        """
+        client_id / redirect_uri が無いと例外になることをテスト
+        """
+        auth = LogilessAuth()
+        with pytest.raises(ValueError):
+            auth.get_authorization_url()
 
     @mock.patch("requests.get")
     def test_fetch_token_success(self, mock_get):
         """
-        トークン取得の成功をテスト
+        認可コードからトークンを取得し、状態が更新されることをテスト
         """
-        # モックレスポンスの設定
         mock_response = mock.Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "access_token": "test_access_token",
-            "refresh_token": "test_refresh_token",
-            "expires_in": 3600,
+            "access_token": "new_access_token",
+            "refresh_token": "new_refresh_token",
+            "expires_in": 2592000,
             "token_type": "bearer",
         }
         mock_get.return_value = mock_response
 
-        # テスト対象の関数を呼び出し
-        result = self.auth.fetch_token("test_code")
+        result = self.auth.fetch_token("auth_code")
 
-        # 期待される結果を検証
         assert result == mock_response.json.return_value
-        assert self.auth.access_token == "test_access_token"
-        assert self.auth.refresh_token == "test_refresh_token"
+        assert self.auth.access_token == "new_access_token"
+        assert self.auth.refresh_token == "new_refresh_token"
         assert self.auth.token_expires_at is not None
-
-        # モックの呼び出しを検証
         mock_get.assert_called_once_with(
-            self.auth.TOKEN_URL,
+            LogilessAuth.TOKEN_URL,
             params={
                 "client_id": self.client_id,
                 "client_secret": self.client_secret,
-                "code": "test_code",
+                "code": "auth_code",
                 "grant_type": "authorization_code",
                 "redirect_uri": self.redirect_uri,
             },
@@ -73,194 +147,110 @@ class TestLogilessAuth:
     @mock.patch("requests.get")
     def test_fetch_token_error(self, mock_get):
         """
-        トークン取得時のエラーをテスト
+        トークンエンドポイントがエラーを返した場合に例外になることをテスト
         """
-        # モックレスポンスの設定
         mock_response = mock.Mock()
         mock_response.status_code = 400
         mock_response.json.return_value = {
-            "error": "invalid_request",
-            "error_description": "Missing required parameter",
+            "error": "invalid_grant",
+            "error_description": "Invalid code",
         }
-        # raise_for_statusメソッドがHTTPErrorを発生させるように設定
-        http_error = HTTPError("400 Client Error")
-        mock_response.raise_for_status.side_effect = http_error
         mock_get.return_value = mock_response
 
-        # テスト対象の関数を呼び出し、例外が発生することを検証
-        with pytest.raises(ValueError):
-            self.auth.fetch_token("invalid_code")
+        with pytest.raises(ValueError, match="トークン取得エラー"):
+            self.auth.fetch_token("bad_code")
 
     @mock.patch("requests.get")
     def test_refresh_access_token_success(self, mock_get):
         """
-        アクセストークンの更新成功をテスト
+        リフレッシュトークンでトークンが更新されることをテスト
         """
-        # 事前条件の設定
-        self.auth.refresh_token = "test_refresh_token"
+        self.auth.refresh_token = "existing_refresh_token"
 
-        # モックレスポンスの設定
         mock_response = mock.Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "access_token": "new_access_token",
-            "refresh_token": "new_refresh_token",
-            "expires_in": 3600,
+            "access_token": "refreshed_access_token",
+            "refresh_token": "refreshed_refresh_token",
+            "expires_in": 2592000,
             "token_type": "bearer",
         }
         mock_get.return_value = mock_response
 
-        # テスト対象の関数を呼び出し
         result = self.auth.refresh_access_token()
 
-        # 期待される結果を検証
         assert result == mock_response.json.return_value
-        assert self.auth.access_token == "new_access_token"
-        assert self.auth.refresh_token == "new_refresh_token"
-
-        # モックの呼び出しを検証
+        assert self.auth.access_token == "refreshed_access_token"
+        assert self.auth.refresh_token == "refreshed_refresh_token"
         mock_get.assert_called_once_with(
-            self.auth.TOKEN_URL,
+            LogilessAuth.TOKEN_URL,
             params={
                 "client_id": self.client_id,
                 "client_secret": self.client_secret,
-                "refresh_token": "test_refresh_token",
+                "refresh_token": "existing_refresh_token",
                 "grant_type": "refresh_token",
             },
         )
 
-    def test_refresh_access_token_no_token(self):
+    def test_refresh_access_token_without_credentials(self):
         """
-        リフレッシュトークンが設定されていない場合のテスト
+        リフレッシュに必要な情報が揃っていないと例外になることをテスト
         """
-        # リフレッシュトークンが設定されていないことを確認
-        self.auth.refresh_token = None
+        auth = LogilessAuth(access_token="t", merchant_id="m")
+        with pytest.raises(ValueError):
+            auth.refresh_access_token()
 
-        # テスト対象の関数を呼び出し、例外が発生することを検証
-        with pytest.raises(ValueError, match="リフレッシュトークンが設定されていません"):
-            self.auth.refresh_access_token()
-
-    def test_set_token(self):
+    def test_set_token_sets_expiry(self):
         """
-        トークンの手動設定をテスト
+        set_token で expires_in から有効期限が設定されることをテスト
         """
-        # テスト対象の関数を呼び出し
-        self.auth.set_token("test_access_token", "test_refresh_token", 3600)
-
-        # 期待される結果を検証
-        assert self.auth.access_token == "test_access_token"
-        assert self.auth.refresh_token == "test_refresh_token"
+        self.auth.set_token("a_token", "r_token", 3600)
+        assert self.auth.access_token == "a_token"
+        assert self.auth.refresh_token == "r_token"
         assert self.auth.token_expires_at is not None
-        # 3600秒後に期限切れになることを検証（多少の誤差を許容）
         assert self.auth.token_expires_at - time.time() > 3590
 
-    def test_get_auth_header(self):
+    def test_is_token_expired_with_expiry(self):
         """
-        認証ヘッダーの取得をテスト
+        有効期限を過ぎたトークンが期限切れ判定されることをテスト
         """
-        # 事前条件の設定
-        self.auth.access_token = "test_access_token"
+        self.auth.access_token = "a_token"
+        self.auth.token_expires_at = time.time() - 10
+        assert self.auth.is_token_expired() is True
 
-        # テスト対象の関数を呼び出し
-        header = self.auth.get_auth_header()
-
-        # 期待される結果を検証
-        assert header == {"Authorization": "Bearer test_access_token"}
-
-    def test_is_token_expired_with_expired_token(self):
-        """
-        トークンが期限切れの場合のテスト
-        """
-        # 事前条件の設定（期限切れのトークン）
-        self.auth.access_token = "test_access_token"
-        self.auth.token_expires_at = time.time() - 100  # 100秒前に期限切れ
-
-        # テスト対象の関数を呼び出し
-        result = self.auth.is_token_expired()
-
-        # 期待される結果を検証
-        assert result is True
-
-    def test_is_token_expired_with_valid_token(self):
-        """
-        トークンが有効な場合のテスト
-        """
-        # 事前条件の設定（有効なトークン）
-        self.auth.access_token = "test_access_token"
-        self.auth.token_expires_at = time.time() + 3600  # 1時間後に期限切れ
-
-        # テスト対象の関数を呼び出し
-        result = self.auth.is_token_expired()
-
-        # 期待される結果を検証
-        assert result is False
-
-    def test_ensure_active_token_no_token(self):
-        """
-        アクセストークンが設定されていない場合のテスト
-        """
-        # 事前条件の設定
-        self.auth.access_token = None
-
-        # テスト対象の関数を呼び出し
-        result, error = self.auth.ensure_active_token()
-
-        # 期待される結果を検証
-        assert result is False
-        assert error == "アクセストークンが設定されていません"
-
-    def test_ensure_active_token_expired_no_refresh(self):
-        """
-        トークンが期限切れだがリフレッシュトークンがない場合のテスト
-        """
-        # 事前条件の設定
-        self.auth.access_token = "test_access_token"
-        self.auth.token_expires_at = time.time() - 100  # 期限切れ
-        self.auth.refresh_token = None
-
-        # テスト対象の関数を呼び出し
-        result, error = self.auth.ensure_active_token()
-
-        # 期待される結果を検証
-        assert result is False
-        assert "トークンの有効期限が切れており" in error
+        self.auth.token_expires_at = time.time() + 3600
+        assert self.auth.is_token_expired() is False
 
     @mock.patch.object(LogilessAuth, "refresh_access_token")
-    def test_ensure_active_token_expired_with_refresh(self, mock_refresh):
+    def test_ensure_active_token_auto_refresh(self, mock_refresh):
         """
-        トークンが期限切れでリフレッシュできる場合のテスト
+        期限切れかつリフレッシュ可能な場合に自動更新されることをテスト
         """
-        # 事前条件の設定
-        self.auth.access_token = "test_access_token"
-        self.auth.token_expires_at = time.time() - 100  # 期限切れ
-        self.auth.refresh_token = "test_refresh_token"
+        self.auth.access_token = "expired_token"
+        self.auth.refresh_token = "a_refresh_token"
+        self.auth.token_expires_at = time.time() - 10
 
-        # モックの設定
-        mock_refresh.return_value = {
-            "access_token": "new_access_token",
-            "refresh_token": "new_refresh_token",
-            "expires_in": 3600,
-        }
+        def _do_refresh():
+            self.auth.access_token = "fresh_token"
+            self.auth.token_expires_at = time.time() + 3600
+            return {}
 
-        # テスト対象の関数を呼び出し
+        mock_refresh.side_effect = _do_refresh
+
         result, error = self.auth.ensure_active_token()
 
-        # 期待される結果を検証
         assert result is True
         assert error is None
         mock_refresh.assert_called_once()
 
-    def test_ensure_active_token_valid(self):
+    def test_ensure_active_token_expired_no_refresh(self):
         """
-        トークンが有効な場合のテスト
+        期限切れでリフレッシュ不可なら (False, メッセージ) を返すことをテスト
         """
-        # 事前条件の設定
-        self.auth.access_token = "test_access_token"
-        self.auth.token_expires_at = time.time() + 3600  # 有効
+        auth = LogilessAuth(access_token="expired_token", merchant_id="m")
+        auth.token_expires_at = time.time() - 10
 
-        # テスト対象の関数を呼び出し
-        result, error = self.auth.ensure_active_token()
+        result, error = auth.ensure_active_token()
 
-        # 期待される結果を検証
-        assert result is True
-        assert error is None
+        assert result is False
+        assert error == "トークンの有効期限が切れています"
