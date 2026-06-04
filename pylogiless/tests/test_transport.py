@@ -281,6 +281,51 @@ class TestIdempotentRetry:
         assert LogilessClient._should_retry_status("GET", 400) is False
 
 
+class TestMultipartContentType:
+    """files 指定時に Content-Type を固定しない（multipart送信を壊さない）ことを検証"""
+
+    def test_content_type_json_when_no_files(self):
+        """files 未指定時は Content-Type: application/json が付与されること"""
+        client = _client()
+        with mock.patch.object(
+            client.session, "request", return_value=_make_response(200, {})
+        ) as mocked:
+            client.request("POST", "https://example.com/x", json={"a": 1})
+        sent_headers = mocked.call_args.kwargs["headers"]
+        assert sent_headers["Content-Type"] == "application/json"
+
+    def test_no_content_type_when_files_present(self):
+        """files 指定時は Content-Type を付与せず requests に委ねること"""
+        client = _client()
+        with mock.patch.object(
+            client.session, "request", return_value=_make_response(200, {})
+        ) as mocked:
+            client.request(
+                "POST",
+                "https://example.com/x",
+                files={"file": ("a.csv", b"data")},
+            )
+        sent_headers = mocked.call_args.kwargs["headers"]
+        assert "Content-Type" not in sent_headers
+        # files はそのまま session.request へ渡ること
+        assert mocked.call_args.kwargs["files"] == {"file": ("a.csv", b"data")}
+
+    def test_explicit_header_overrides_even_with_files(self):
+        """files 指定時でも呼び出し側が明示した Content-Type は尊重されること"""
+        client = _client()
+        with mock.patch.object(
+            client.session, "request", return_value=_make_response(200, {})
+        ) as mocked:
+            client.request(
+                "POST",
+                "https://example.com/x",
+                files={"file": ("a.csv", b"data")},
+                headers={"Content-Type": "multipart/form-data; boundary=xyz"},
+            )
+        sent_headers = mocked.call_args.kwargs["headers"]
+        assert sent_headers["Content-Type"] == "multipart/form-data; boundary=xyz"
+
+
 class TestResponseParsingErrors:
     """成功応答の解析中に発生する想定外例外のフォールバックを検証"""
 

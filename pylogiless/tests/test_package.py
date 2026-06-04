@@ -214,6 +214,7 @@ class TestOAuth2KeywordArguments:
     def test_client_accepts_oauth2_kwargs(self):
         """LogilessClient が OAuth2 用キーワード引数を auth へ受け渡すこと"""
         client = LogilessClient(
+            merchant_id="m",
             client_id="cid",
             client_secret="secret",
             redirect_uri="https://cb.test/callback",
@@ -224,9 +225,22 @@ class TestOAuth2KeywordArguments:
         assert client.auth.redirect_uri == "https://cb.test/callback"
         assert client.auth.refresh_token == "rtok"
 
+    def test_client_requires_merchant_id(self):
+        """merchant_id 未指定では ValueError になり merchant/None を作らないこと"""
+        with pytest.raises(ValueError, match="merchant_id"):
+            LogilessClient(
+                client_id="cid",
+                client_secret="secret",
+                redirect_uri="https://cb.test/callback",
+            )
+        # 静的トークン方式でも merchant_id 必須
+        with pytest.raises(ValueError, match="merchant_id"):
+            LogilessClient(access_token="tok")
+
     def test_client_oauth2_resources_initialized(self):
         """OAuth2方式で生成したクライアントでも16リソースが初期化されること"""
         client = LogilessClient(
+            merchant_id="m",
             client_id="cid",
             client_secret="secret",
             redirect_uri="https://cb.test/callback",
