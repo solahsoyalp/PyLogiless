@@ -97,9 +97,9 @@ class TestPackageMetadata:
     """パッケージのメタデータ（バージョン・__all__）を検証する"""
 
     def test_version_value(self):
-        """__version__ が文字列 "0.3.0" であること"""
+        """__version__ が文字列 "0.3.1" であること"""
         assert isinstance(pylogiless.__version__, str)
-        assert pylogiless.__version__ == "0.3.0"
+        assert pylogiless.__version__ == "0.3.1"
 
     def test_all_is_list(self):
         """__all__ が定義され、期待するシンボル集合と一致すること"""

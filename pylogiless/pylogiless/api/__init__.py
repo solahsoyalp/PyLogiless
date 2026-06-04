@@ -5,7 +5,7 @@ pylogiless - LOGILESS API クライアントライブラリ
 アクセストークンとマーチャントIDによる認証に対応しています。
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 from .auth import LogilessAuth
 from .client import (
