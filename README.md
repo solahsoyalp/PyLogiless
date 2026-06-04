@@ -64,9 +64,61 @@ pip install pylogiless
 
 ## 必要条件
 
-- Python 3.7以上
+- Python 3.8以上
 - requests >= 2.31.0
 - python-dotenv >= 1.0.0
+
+## リトライ・タイムアウト設定
+
+`LogilessClient` はHTTP通信に `requests.Session` を内部で保持し、一時的な通信障害や
+サーバー側の過負荷に対して自動リトライを行います。初期化時に以下のキーワード専用引数で
+挙動を調整できます。
+
+| 引数 | 既定値 | 説明 |
+| --- | --- | --- |
+| `timeout` | `30` | 1リクエストあたりのタイムアウト（秒） |
+| `max_retries` | `3` | リトライ上限回数 |
+| `retry_delay` | `1.0` | リトライ間の待機時間（秒） |
+
+```python
+from pylogiless import LogilessClient
+
+client = LogilessClient(
+    access_token="YOUR_TOKEN",
+    merchant_id="YOUR_MERCHANT_ID",
+    timeout=30,
+    max_retries=3,
+    retry_delay=1.0,
+)
+```
+
+リトライ対象は `requests` の通信例外（`RequestException`）と、ステータスコード
+`429 / 500 / 502 / 503 / 504` のレスポンスです。`max_retries` を使い切った場合は
+従来どおり例外を送出します。`423`（locked）や `429` 以外の `4xx` はリトライせず
+即座にエラーとなります。
+
+## 型サポート
+
+本ライブラリは `py.typed` マーカーを同梱しており、mypy / pyright などの型チェッカに
+型情報を配布します。インポート名はトップレベルの `pylogiless` で、サブモジュールは
+`pylogiless.api.{auth,client,errors}` から利用できます。
+
+## レスポンスとページネーション
+
+各リソースメソッドの返り値は、APIレスポンスをパースした生の `dict`（JSON）です。
+ページネーションは `list(**params)` に任意のクエリパラメータを渡して制御できます。
+
+```python
+# page / per_page を渡してページングする例
+articles = client.article.list(page=2, per_page=50)
+```
+
+> 注: LOGILESS APIのページング仕様は確定していないため、自動ページネーションは
+> 提供していません。受け取った `dict` のページ情報を参照して呼び出し側で制御してください。
+
+## Roadmap
+
+- レスポンスを `dict` から型付き dataclass モデルへ変換する仕組みの検討（将来課題）
 
 ## 使用方法
 

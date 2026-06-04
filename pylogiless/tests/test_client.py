@@ -178,8 +178,7 @@ class TestLogilessClient:
             "DELETE", f"{self.client.api_base_url}/merchant/{self.client.auth.merchant_id}/articles/123"
         )
 
-    @mock.patch("requests.request")
-    def test_request_success(self, mock_request):
+    def test_request_success(self):
         """
         requestメソッドの成功をテスト
         """
@@ -191,10 +190,12 @@ class TestLogilessClient:
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/json"}
         mock_response.json.return_value = {"id": "123", "name": "テスト商品"}
-        mock_request.return_value = mock_response
 
-        # テスト対象の関数を呼び出し
-        result = self.client.request("GET", "https://app2.logiless.com/api/article/123")
+        with mock.patch.object(
+            self.client.session, "request", return_value=mock_response
+        ) as mock_request:
+            # テスト対象の関数を呼び出し
+            result = self.client.request("GET", "https://app2.logiless.com/api/article/123")
 
         # 期待される結果を検証
         assert result == {"id": "123", "name": "テスト商品"}
@@ -202,8 +203,7 @@ class TestLogilessClient:
         assert mock_request.call_args[0][0] == "GET"
         assert mock_request.call_args[0][1] == "https://app2.logiless.com/api/article/123"
 
-    @mock.patch("requests.request")
-    def test_request_with_invalid_token(self, mock_request):
+    def test_request_with_invalid_token(self):
         """
         無効なトークンを使用した場合のrequestメソッドをテスト
         """
@@ -211,15 +211,15 @@ class TestLogilessClient:
         mock_ensure_token = mock.Mock(return_value=(False, "トークンが無効です"))
         self.client.auth.ensure_active_token = mock_ensure_token
 
-        # テスト対象の関数を呼び出し、例外が発生することを検証
-        with pytest.raises(LogilessError, match="トークンが無効です"):
-            self.client.request("GET", "https://app2.logiless.com/api/article/123")
+        with mock.patch.object(self.client.session, "request") as mock_request:
+            # テスト対象の関数を呼び出し、例外が発生することを検証
+            with pytest.raises(LogilessError, match="トークンが無効です"):
+                self.client.request("GET", "https://app2.logiless.com/api/article/123")
 
-        # requestが呼ばれていないことを確認
-        mock_request.assert_not_called()
+            # requestが呼ばれていないことを確認
+            mock_request.assert_not_called()
 
-    @mock.patch("requests.request")
-    def test_request_with_validation_error(self, mock_request):
+    def test_request_with_validation_error(self):
         """
         バリデーションエラーが発生した場合のrequestメソッドをテスト
         """
@@ -235,14 +235,13 @@ class TestLogilessClient:
             "message": "Validation Failed",
             "errors": {"name": "必須項目です"},
         }
-        mock_request.return_value = mock_response
 
-        # テスト対象の関数を呼び出し、例外が発生することを検証
-        with pytest.raises(LogilessValidationError):
-            self.client.request("POST", "https://app2.logiless.com/api/article", json={"code": "TEST"})
+        with mock.patch.object(self.client.session, "request", return_value=mock_response):
+            # テスト対象の関数を呼び出し、例外が発生することを検証
+            with pytest.raises(LogilessValidationError):
+                self.client.request("POST", "https://app2.logiless.com/api/article", json={"code": "TEST"})
 
-    @mock.patch("requests.request")
-    def test_request_with_auth_error(self, mock_request):
+    def test_request_with_auth_error(self):
         """
         認証エラーが発生した場合のrequestメソッドをテスト
         """
@@ -257,16 +256,17 @@ class TestLogilessClient:
             "error": "invalid_token",
             "error_description": "トークンが無効です",
         }
-        mock_request.return_value = mock_response
 
-        # テスト対象の関数を呼び出し、例外が発生することを検証
-        with pytest.raises(LogilessAuthError):
-            self.client.request("GET", "https://app2.logiless.com/api/article/123")
+        with mock.patch.object(self.client.session, "request", return_value=mock_response):
+            # テスト対象の関数を呼び出し、例外が発生することを検証
+            with pytest.raises(LogilessAuthError):
+                self.client.request("GET", "https://app2.logiless.com/api/article/123")
 
-    @mock.patch("requests.request")
-    def test_request_with_rate_limit_error(self, mock_request):
+    def test_request_with_rate_limit_error(self):
         """
         レート制限エラーが発生した場合のrequestメソッドをテスト
+
+        429 はリトライ対象のため time.sleep をモックし、使い切った後に送出される
         """
         # モックの設定
         mock_ensure_token = mock.Mock(return_value=(True, None))
@@ -279,16 +279,18 @@ class TestLogilessClient:
             "error": "rate_limit_exceeded",
             "error_description": "APIのリクエストレート制限を超えました",
         }
-        mock_request.return_value = mock_response
 
-        # テスト対象の関数を呼び出し、例外が発生することを検証
-        with pytest.raises(LogilessRateLimitError):
-            self.client.request("GET", "https://app2.logiless.com/api/article/123")
+        with mock.patch("time.sleep"):
+            with mock.patch.object(self.client.session, "request", return_value=mock_response):
+                # テスト対象の関数を呼び出し、例外が発生することを検証
+                with pytest.raises(LogilessRateLimitError):
+                    self.client.request("GET", "https://app2.logiless.com/api/article/123")
 
-    @mock.patch("requests.request")
-    def test_request_with_server_error(self, mock_request):
+    def test_request_with_server_error(self):
         """
         サーバーエラーが発生した場合のrequestメソッドをテスト
+
+        500 はリトライ対象のため time.sleep をモックし、使い切った後に送出される
         """
         # モックの設定
         mock_ensure_token = mock.Mock(return_value=(True, None))
@@ -301,14 +303,14 @@ class TestLogilessClient:
             "error": "internal_server_error",
             "error_description": "内部サーバーエラーが発生しました",
         }
-        mock_request.return_value = mock_response
 
-        # テスト対象の関数を呼び出し、例外が発生することを検証
-        with pytest.raises(LogilessServerError):
-            self.client.request("GET", "https://app2.logiless.com/api/article/123")
+        with mock.patch("time.sleep"):
+            with mock.patch.object(self.client.session, "request", return_value=mock_response):
+                # テスト対象の関数を呼び出し、例外が発生することを検証
+                with pytest.raises(LogilessServerError):
+                    self.client.request("GET", "https://app2.logiless.com/api/article/123")
 
-    @mock.patch("requests.request")
-    def test_request_with_non_json_response(self, mock_request):
+    def test_request_with_non_json_response(self):
         """
         非JSONレスポンスの場合のrequestメソッドをテスト
         """
@@ -320,10 +322,10 @@ class TestLogilessClient:
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "text/plain"}
         mock_response.text = "プレーンテキストレスポンス"
-        mock_request.return_value = mock_response
 
-        # テスト対象の関数を呼び出し
-        result = self.client.request("GET", "https://app2.logiless.com/api/article/123")
+        with mock.patch.object(self.client.session, "request", return_value=mock_response):
+            # テスト対象の関数を呼び出し
+            result = self.client.request("GET", "https://app2.logiless.com/api/article/123")
 
         # 期待される結果を検証
         assert result == {"text": "プレーンテキストレスポンス"}

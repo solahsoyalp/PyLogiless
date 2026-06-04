@@ -25,6 +25,23 @@ client = LogilessClient(
 )
 ```
 
+### リトライ・タイムアウトの指定
+`timeout` / `max_retries` / `retry_delay`（いずれもキーワード専用引数）で
+通信のタイムアウトと自動リトライ挙動を調整できます。
+```python
+from pylogiless import LogilessClient
+
+client = LogilessClient(
+    access_token="YOUR_ACCESS_TOKEN",
+    merchant_id="YOUR_MERCHANT_ID",
+    timeout=30,       # 1リクエストあたりのタイムアウト（秒）
+    max_retries=3,    # リトライ上限回数
+    retry_delay=1.0,  # リトライ間の待機時間（秒）
+)
+```
+リトライ対象は通信例外と、ステータスコード `429 / 500 / 502 / 503 / 504` です。
+`423` や `429` 以外の `4xx` はリトライせず即座にエラーとなります。
+
 ### OAuth2 認可コードフロー方式
 `client_id` / `client_secret` / `redirect_uri` を渡すと、認可URLの生成・認可コードからの
 トークン取得・期限切れ時の自動リフレッシュが利用できます。

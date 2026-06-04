@@ -18,6 +18,8 @@ from typing import Any, Dict, Optional, Tuple
 import requests
 from requests.exceptions import RequestException
 
+from . import constants
+
 
 class LogilessAuth:
     """
@@ -26,9 +28,9 @@ class LogilessAuth:
     静的アクセストークンと OAuth2 認可コードフローの両方に対応します。
     """
 
-    # OAuth2 エンドポイント（LOGILESS APIドキュメント準拠）
-    AUTH_URL = "https://app2.logiless.com/oauth/v2/auth"
-    TOKEN_URL = "https://app2.logiless.com/oauth2/token"
+    # OAuth2 エンドポイント（LOGILESS APIドキュメント準拠。値は constants 由来）
+    AUTH_URL = constants.OAUTH_AUTH_URL
+    TOKEN_URL = constants.OAUTH_TOKEN_URL
 
     def __init__(
         self,
