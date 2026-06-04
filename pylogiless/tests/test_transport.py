@@ -194,6 +194,93 @@ class TestNonRetryableStatusCodes:
         assert req_mock.call_count == 1
 
 
+class TestIdempotentRetry:
+    """再試行の冪等性（非冪等メソッドの二重実行防止）を検証"""
+
+    def test_post_not_retried_on_request_exception(self):
+        """POST は通信例外で再試行されず、1回で LogilessError になること"""
+        client = _client(max_retries=3, retry_delay=0.01)
+        with mock.patch("time.sleep") as sleep_mock:
+            with mock.patch.object(
+                client.session,
+                "request",
+                side_effect=RequestsConnectionError("conn refused"),
+            ) as req_mock:
+                with pytest.raises(LogilessError, match="APIリクエストエラー"):
+                    client.request("POST", "https://example.com/x", json={"a": 1})
+        assert req_mock.call_count == 1
+        sleep_mock.assert_not_called()
+
+    @pytest.mark.parametrize("method", ["PUT", "DELETE", "GET", "HEAD"])
+    def test_idempotent_retried_on_request_exception(self, method):
+        """冪等メソッドは通信例外で再試行されること"""
+        client = _client(max_retries=2, retry_delay=0.01)
+        with mock.patch("time.sleep") as sleep_mock:
+            with mock.patch.object(
+                client.session,
+                "request",
+                side_effect=RequestsConnectionError("conn refused"),
+            ) as req_mock:
+                with pytest.raises(LogilessError):
+                    client.request(method, "https://example.com/x")
+        assert req_mock.call_count == client.max_retries + 1
+        assert sleep_mock.call_count == client.max_retries
+
+    @pytest.mark.parametrize("status_code", [500, 502, 504])
+    def test_post_not_retried_on_server_error_status(self, status_code):
+        """POST はサーバが処理した可能性のある 5xx(500/502/504) では再試行しないこと"""
+        client = _client(max_retries=3, retry_delay=0.01)
+        resp = _make_response(status_code, {"error": "boom"})
+        with mock.patch("time.sleep") as sleep_mock:
+            with mock.patch.object(
+                client.session, "request", return_value=resp
+            ) as req_mock:
+                with pytest.raises(LogilessError):
+                    client.request("POST", "https://example.com/x", json={"a": 1})
+        assert req_mock.call_count == 1
+        sleep_mock.assert_not_called()
+
+    @pytest.mark.parametrize("status_code", [429, 503])
+    def test_post_retried_on_safe_status(self, status_code):
+        """POST でもサーバ未処理が確実なコード(429/503)では再試行すること"""
+        client = _client(max_retries=2, retry_delay=0.01)
+        resp = _make_response(status_code, {"error": "later"})
+        with mock.patch("time.sleep") as sleep_mock:
+            with mock.patch.object(
+                client.session, "request", return_value=resp
+            ) as req_mock:
+                with pytest.raises(LogilessError):
+                    client.request("POST", "https://example.com/x", json={"a": 1})
+        assert req_mock.call_count == client.max_retries + 1
+        assert sleep_mock.call_count == client.max_retries
+
+    def test_delete_retried_on_server_error_status(self):
+        """冪等メソッド(DELETE)は 500 でも再試行されること"""
+        client = _client(max_retries=2, retry_delay=0.01)
+        resp = _make_response(500, {"error": "boom"})
+        with mock.patch("time.sleep"):
+            with mock.patch.object(
+                client.session, "request", return_value=resp
+            ) as req_mock:
+                with pytest.raises(LogilessServerError):
+                    client.request("DELETE", "https://example.com/x")
+        assert req_mock.call_count == client.max_retries + 1
+
+    def test_helpers_classify_methods(self):
+        """_is_idempotent / _should_retry_status の分類を直接検証"""
+        assert LogilessClient._is_idempotent("get") is True
+        assert LogilessClient._is_idempotent("PUT") is True
+        assert LogilessClient._is_idempotent("post") is False
+        # 非冪等メソッド: 429/503 のみ再試行可
+        assert LogilessClient._should_retry_status("POST", 429) is True
+        assert LogilessClient._should_retry_status("POST", 503) is True
+        assert LogilessClient._should_retry_status("POST", 500) is False
+        # 冪等メソッド: リトライ対象コードは全て再試行可
+        assert LogilessClient._should_retry_status("GET", 500) is True
+        # リトライ対象外コードは常に False
+        assert LogilessClient._should_retry_status("GET", 400) is False
+
+
 class TestResponseParsingErrors:
     """成功応答の解析中に発生する想定外例外のフォールバックを検証"""
 

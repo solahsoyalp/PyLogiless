@@ -106,6 +106,40 @@ class LogilessClient:
         self.transaction_log = TransactionLogResource(self)
         self.inter_warehouse_transfer = InterWarehouseTransferResource(self)
 
+    @staticmethod
+    def _is_idempotent(method: str) -> bool:
+        """
+        HTTPメソッドが冪等かどうかを返す
+
+        Args:
+            method (str): HTTPメソッド
+
+        Returns:
+            bool: 冪等メソッドであればTrue
+        """
+        return method.upper() in constants.IDEMPOTENT_METHODS
+
+    @classmethod
+    def _should_retry_status(cls, method: str, status_code: int) -> bool:
+        """
+        ステータスコードに基づき再試行すべきかを判定する
+
+        冪等メソッドはリトライ対象コードすべてで再試行する。非冪等メソッドは
+        サーバが処理していないと確実に分かるコード（429 / 503）のみ再試行する。
+
+        Args:
+            method (str): HTTPメソッド
+            status_code (int): レスポンスのステータスコード
+
+        Returns:
+            bool: 再試行すべきであればTrue
+        """
+        if status_code not in constants.RETRYABLE_STATUS_CODES:
+            return False
+        if cls._is_idempotent(method):
+            return True
+        return status_code in constants.SAFE_TO_RETRY_STATUS_FOR_NON_IDEMPOTENT
+
     def request(
         self,
         method: str,
@@ -122,6 +156,14 @@ class LogilessClient:
         （constants.RETRYABLE_STATUS_CODES）の場合は、最大 ``max_retries`` 回まで
         ``retry_delay`` 秒の待機を挟んで自動的に再試行します。再試行を使い切った
         場合は従来通り例外を送出します。
+
+        ただし更新処理の二重実行を避けるため、再試行は冪等性を考慮します。
+        - 通信例外（応答前に切断され処理済みか不明）での再試行は、冪等メソッド
+          （GET/HEAD/PUT/DELETE/OPTIONS/TRACE）に限定します。POST のような
+          非冪等メソッドは再試行せず即座に例外を送出します。
+        - ステータスコードによる再試行は、冪等メソッドでは従来どおり行い、
+          非冪等メソッドではサーバが処理していないと確実に分かるコード
+          （429 / 503）のみ再試行します。
 
         Args:
             method (str): HTTPメソッド
@@ -164,8 +206,9 @@ class LogilessClient:
                     timeout=self.timeout,
                 )
             except RequestException as e:
-                # 通信例外: リトライ余地があれば待機して再試行
-                if attempt < self.max_retries:
+                # 通信例外: 冪等メソッドかつリトライ余地があれば待機して再試行。
+                # 非冪等メソッドは処理済みの可能性があるため再試行しない。
+                if attempt < self.max_retries and self._is_idempotent(method):
                     attempt += 1
                     time.sleep(self.retry_delay)
                     continue
@@ -173,10 +216,10 @@ class LogilessClient:
             except Exception as e:
                 raise LogilessError(f"不明なエラー: {str(e)}")
 
-            # リトライ対象ステータスコード: リトライ余地があれば再試行
-            if (
-                response.status_code in constants.RETRYABLE_STATUS_CODES
-                and attempt < self.max_retries
+            # リトライ対象ステータスコード: リトライ余地があり、かつ
+            # 冪等性の観点から安全に再試行できる場合のみ再試行する。
+            if attempt < self.max_retries and self._should_retry_status(
+                method, response.status_code
             ):
                 attempt += 1
                 time.sleep(self.retry_delay)
