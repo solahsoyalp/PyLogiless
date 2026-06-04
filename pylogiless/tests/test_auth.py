@@ -3,10 +3,12 @@
 """
 import time
 from unittest import mock
+from urllib.parse import urlencode
 
 import pytest
 
 from pylogiless.api.auth import LogilessAuth
+from pylogiless.api.constants import DEFAULT_TIMEOUT
 
 
 class TestLogilessAuth:
@@ -96,13 +98,32 @@ class TestLogilessAuthOAuth2:
 
     def test_get_authorization_url(self):
         """
-        認可URLが正しく生成されることをテスト
+        認可URLが正しく生成され、クエリがURLエンコードされることをテスト
         """
-        expected = (
-            f"{LogilessAuth.AUTH_URL}?client_id={self.client_id}"
-            f"&response_type=code&redirect_uri={self.redirect_uri}"
+        query = urlencode(
+            {
+                "client_id": self.client_id,
+                "response_type": "code",
+                "redirect_uri": self.redirect_uri,
+            }
         )
+        expected = f"{LogilessAuth.AUTH_URL}?{query}"
         assert self.auth.get_authorization_url() == expected
+
+    def test_get_authorization_url_encodes_special_characters(self):
+        """
+        redirect_uri に特殊文字が含まれてもURLエンコードされることをテスト
+        """
+        auth = LogilessAuth(
+            client_id="id with space",
+            client_secret="secret",
+            redirect_uri="https://example.com/cb?foo=bar&baz=1",
+        )
+        url = auth.get_authorization_url()
+        # 生の特殊文字がそのまま現れていないこと（エンコードされていること）
+        assert "id with space" not in url
+        assert "id+with+space" in url or "id%20with%20space" in url
+        assert "redirect_uri=https%3A%2F%2Fexample.com%2Fcb%3Ffoo%3Dbar%26baz%3D1" in url
 
     def test_get_authorization_url_missing_params(self):
         """
@@ -142,6 +163,7 @@ class TestLogilessAuthOAuth2:
                 "grant_type": "authorization_code",
                 "redirect_uri": self.redirect_uri,
             },
+            timeout=DEFAULT_TIMEOUT,
         )
 
     @mock.patch("requests.get")
@@ -190,6 +212,7 @@ class TestLogilessAuthOAuth2:
                 "refresh_token": "existing_refresh_token",
                 "grant_type": "refresh_token",
             },
+            timeout=DEFAULT_TIMEOUT,
         )
 
     def test_refresh_access_token_without_credentials(self):
@@ -209,6 +232,40 @@ class TestLogilessAuthOAuth2:
         assert self.auth.refresh_token == "r_token"
         assert self.auth.token_expires_at is not None
         assert self.auth.token_expires_at - time.time() > 3590
+
+    def test_set_token_without_expires_in_resets_expiry(self):
+        """
+        expires_in 省略時は以前の有効期限を引き継がず None にリセットされることをテスト
+        （回帰: 古い有効期限が残ると新トークンが即座に期限切れ扱いされうる）
+        """
+        # 既に有効期限が設定済みの状態
+        self.auth.token_expires_at = time.time() + 3600
+        # expires_in を渡さずに新トークンを設定
+        self.auth.set_token("new_token")
+        assert self.auth.access_token == "new_token"
+        assert self.auth.token_expires_at is None
+        # 有効期限不明（None）は期限切れではないとみなす
+        assert self.auth.is_token_expired() is False
+
+    def test_fetch_token_without_access_token_raises(self):
+        """
+        トークン応答に access_token が無い場合は成功扱いせず例外になることをテスト
+        """
+        with mock.patch("requests.get") as mock_get:
+            mock_response = mock.Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {
+                "refresh_token": "r",
+                "expires_in": 3600,
+                "token_type": "bearer",
+            }
+            mock_get.return_value = mock_response
+
+            with pytest.raises(ValueError, match="access_token"):
+                self.auth.fetch_token("auth_code")
+
+            # 不正応答ではトークンを更新しないこと
+            assert self.auth.access_token is None
 
     def test_is_token_expired_with_expiry(self):
         """

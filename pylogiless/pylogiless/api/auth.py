@@ -14,6 +14,7 @@
 """
 import time
 from typing import Any, Dict, Optional, Tuple
+from urllib.parse import urlencode
 
 import requests
 from requests.exceptions import RequestException
@@ -96,10 +97,14 @@ class LogilessAuth:
         """
         if not self.client_id or not self.redirect_uri:
             raise ValueError("認可URLの生成には client_id と redirect_uri が必要です")
-        return (
-            f"{self.AUTH_URL}?client_id={self.client_id}"
-            f"&response_type=code&redirect_uri={self.redirect_uri}"
+        query = urlencode(
+            {
+                "client_id": self.client_id,
+                "response_type": "code",
+                "redirect_uri": self.redirect_uri,
+            }
         )
+        return f"{self.AUTH_URL}?{query}"
 
     def fetch_token(self, code: str) -> Dict[str, Any]:
         """
@@ -165,7 +170,9 @@ class LogilessAuth:
             ValueError: リクエスト失敗・エラーレスポンス・JSONパース失敗の場合
         """
         try:
-            response = requests.get(self.TOKEN_URL, params=params)
+            response = requests.get(
+                self.TOKEN_URL, params=params, timeout=constants.DEFAULT_TIMEOUT
+            )
         except RequestException as e:
             raise ValueError(f"トークンリクエストに失敗しました: {str(e)}")
 
@@ -183,8 +190,15 @@ class LogilessAuth:
         except ValueError as e:
             raise ValueError(f"トークンレスポンスのJSONパースに失敗しました: {str(e)}")
 
+        access_token = data.get("access_token")
+        if not access_token:
+            raise ValueError(
+                "トークン応答に access_token が含まれていません: "
+                f"{data}"
+            )
+
         self.set_token(
-            data.get("access_token"),
+            access_token,
             data.get("refresh_token", self.refresh_token),
             data.get("expires_in"),
         )
@@ -204,12 +218,17 @@ class LogilessAuth:
             refresh_token (Optional[str], optional): リフレッシュトークン
             expires_in (Optional[int], optional): 有効期限までの秒数。
                 指定すると ``token_expires_at`` を現在時刻からの相対で設定します。
+                省略（None）した場合は、以前の有効期限を引き継がず
+                ``token_expires_at`` を None（有効期限不明）にリセットします。
         """
         self.access_token = access_token
         if refresh_token is not None:
             self.refresh_token = refresh_token
         if expires_in is not None:
             self.token_expires_at = time.time() + float(expires_in)
+        else:
+            # 新しいトークンに対して古い有効期限を残さない
+            self.token_expires_at = None
 
     def is_token_expired(self) -> bool:
         """
