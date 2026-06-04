@@ -197,8 +197,17 @@ pip install -e .
 
 ## テスト
 
+テストは `pylogiless/tests/` 配下にあり、`pyproject.toml` の `testpaths` で
+収集先を指定済みです。リポジトリのルートで以下を実行してください。
+
 ```bash
-python -m pytest tests/
+python -m pytest
+```
+
+カバレッジ付きで実行する場合:
+
+```bash
+python -m pytest --cov=pylogiless
 ```
 
 ## 貢献
