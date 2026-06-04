@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.3.0] - 2026-06-04
+
+### 追加
+- transport層を追加。`LogilessClient` が内部で `requests.Session` を保持し、
+  キーワード専用引数 `timeout` / `max_retries` / `retry_delay` による
+  タイムアウト・自動リトライに対応（リトライ対象: 通信例外および
+  ステータスコード `429 / 500 / 502 / 503 / 504`）
+- `py.typed` を同梱し、mypy / pyright などの型チェッカ向けに型情報を配布
+- `SECURITY.md` / `RELEASING.md` を追加し、Trusted Publishing(OIDC) による
+  PyPI 公開のリリースCIを整備
+
+### 変更点
+- リソースクラスを `resources/` サブパッケージへ分割（公開APIは後方互換を維持し、
+  `pylogiless` および `pylogiless.api.client` からの import は従来どおり利用可能）
+- 既定値・リトライ対象ステータスコード・各種URLを `constants.py` へ集約
+- パッケージ設定を `pyproject.toml` の `[project]` テーブルへモダン化し、
+  バージョンを `dynamic` 管理に変更
+- `requires-python >= 3.8`
+
+## [0.2.1] - 2026-06-04
+
+### 追加
+- 受注返品(SalesReturn)APIの追加
+- OAuth2 認可コードフロー対応（ハイブリッド）。`client_id` / `client_secret` / `redirect_uri` /
+  `refresh_token` を指定すると、認可URL生成・認可コードからのトークン取得・期限切れ時の
+  リフレッシュトークンによる自動更新が利用可能（静的アクセストークン方式は従来どおり後方互換）
+- 包括的なテストスイート（320件）とCI(GitHub Actions)・カバレッジ設定を追加（ソース行カバレッジ100%）
+
+### 変更点
+- 認証ヘッダからX-Merchant-IDを削除しドキュメント仕様に整合
+- ドキュメント/docstringの認証説明を更新
+
 ## [0.2.0] - 2024-03-21
 
 ### 変更点

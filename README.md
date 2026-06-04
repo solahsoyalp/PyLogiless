@@ -2,17 +2,59 @@
 
 LOGILESS APIのPythonクライアントライブラリ。在庫管理や物流管理のためのAPIを簡単に利用できるようにします。
 
+## 認証
+
+本ライブラリは2通りの認証方式をサポートします。いずれの場合も認証ヘッダには
+`Authorization: Bearer <access_token>` のみが付与され、マーチャントIDはURLパスに含まれます。
+
+**1. 静的アクセストークン方式（既定）**
+
+事前に発行したアクセストークン (`access_token`) とマーチャントID (`merchant_id`) を
+`LogilessClient` に渡します。
+
+```python
+client = LogilessClient(access_token="YOUR_TOKEN", merchant_id="YOUR_MERCHANT_ID")
+```
+
+**2. OAuth2 認可コードフロー方式**
+
+`client_id` / `client_secret` / `redirect_uri` を渡すと、認可URLの生成・認可コードからの
+トークン取得・期限切れ時のリフレッシュトークンによる自動更新が利用できます。
+
+```python
+client = LogilessClient(
+    merchant_id="YOUR_MERCHANT_ID",
+    client_id="YOUR_CLIENT_ID",
+    client_secret="YOUR_CLIENT_SECRET",
+    redirect_uri="https://example.com/callback",
+)
+# 1) 認可URLへユーザーを誘導
+url = client.auth.get_authorization_url()
+# 2) 返ってきた認可コードをトークンに交換
+client.auth.fetch_token("AUTHORIZATION_CODE")
+# 以降のAPI呼び出しでは、期限切れ時に refresh_token で自動更新されます
+```
+
 ## 機能
 
-- 実在庫サマリAPI
-  - 商品の実際の在庫状況の取得
-  - 倉庫やロケーションごとの在庫情報の取得
-- 論理在庫サマリAPI
-  - 商品の論理的な在庫状況の取得
-  - 在庫切れや再発注レベルの情報の取得
-- 商品一覧API
-  - 商品の基本情報の取得
-  - 商品タイプ、税表示、温度管理などの設定情報の取得
+以下のリソースを `client.<resource>` 経由で操作できます。
+
+- 受注 (sales_order)
+- 受注返品 (sales_return)
+- 出荷 (outbound_delivery)
+- 入荷 (inbound_delivery)
+- 倉庫間移動 (inter_warehouse_transfer)
+- 商品 (article)
+- 商品マップ (article_map)
+- サプライヤ (supplier)
+- 店舗 (store)
+- 倉庫 (warehouse)
+- ロケーション (location)
+- 再注文点 (reorder_point)
+- 実在庫サマリ (actual_inventory_summary)
+- 論理在庫サマリ (logical_inventory_summary)
+- 日次在庫サマリ (daily_inventory_summary)
+- 取引ログ (transaction_log)
 
 ## インストール
 
@@ -22,9 +64,61 @@ pip install pylogiless
 
 ## 必要条件
 
-- Python 3.7以上
+- Python 3.8以上
 - requests >= 2.31.0
 - python-dotenv >= 1.0.0
+
+## リトライ・タイムアウト設定
+
+`LogilessClient` はHTTP通信に `requests.Session` を内部で保持し、一時的な通信障害や
+サーバー側の過負荷に対して自動リトライを行います。初期化時に以下のキーワード専用引数で
+挙動を調整できます。
+
+| 引数 | 既定値 | 説明 |
+| --- | --- | --- |
+| `timeout` | `30` | 1リクエストあたりのタイムアウト（秒） |
+| `max_retries` | `3` | リトライ上限回数 |
+| `retry_delay` | `1.0` | リトライ間の待機時間（秒） |
+
+```python
+from pylogiless import LogilessClient
+
+client = LogilessClient(
+    access_token="YOUR_TOKEN",
+    merchant_id="YOUR_MERCHANT_ID",
+    timeout=30,
+    max_retries=3,
+    retry_delay=1.0,
+)
+```
+
+リトライ対象は `requests` の通信例外（`RequestException`）と、ステータスコード
+`429 / 500 / 502 / 503 / 504` のレスポンスです。`max_retries` を使い切った場合は
+従来どおり例外を送出します。`423`（locked）や `429` 以外の `4xx` はリトライせず
+即座にエラーとなります。
+
+## 型サポート
+
+本ライブラリは `py.typed` マーカーを同梱しており、mypy / pyright などの型チェッカに
+型情報を配布します。インポート名はトップレベルの `pylogiless` で、サブモジュールは
+`pylogiless.api.{auth,client,errors}` から利用できます。
+
+## レスポンスとページネーション
+
+各リソースメソッドの返り値は、APIレスポンスをパースした生の `dict`（JSON）です。
+ページネーションは `list(**params)` に任意のクエリパラメータを渡して制御できます。
+
+```python
+# page / per_page を渡してページングする例
+articles = client.article.list(page=2, per_page=50)
+```
+
+> 注: LOGILESS APIのページング仕様は確定していないため、自動ページネーションは
+> 提供していません。受け取った `dict` のページ情報を参照して呼び出し側で制御してください。
+
+## Roadmap
+
+- レスポンスを `dict` から型付き dataclass モデルへ変換する仕組みの検討（将来課題）
 
 ## 使用方法
 

@@ -210,3 +210,6 @@ env/
 test_install_env/
 prod_test_env/
 .pypirc
+
+# Claude Code session/local files
+.claude/

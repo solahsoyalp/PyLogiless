@@ -2,7 +2,7 @@
 pylogiless - LOGILESS API クライアントライブラリ
 
 ロジレス（LOGILESS）APIにPythonからアクセスするためのクライアントライブラリです。
-OAuth2認証と主要なAPIエンドポイントに対応しています。
+アクセストークンとマーチャントIDによる認証に対応しています。
 """
 
 from .api.auth import LogilessAuth
@@ -24,6 +24,7 @@ from .api.client import (
     DailyInventorySummaryResource,
     TransactionLogResource,
     InterWarehouseTransferResource,
+    SalesReturnResource,
 )
 from .api.errors import (
     LogilessError,
@@ -34,7 +35,7 @@ from .api.errors import (
     LogilessServerError,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "LogilessClient",
@@ -61,4 +62,5 @@ __all__ = [
     "DailyInventorySummaryResource",
     "TransactionLogResource",
     "InterWarehouseTransferResource",
-] 
+    "SalesReturnResource",
+]
