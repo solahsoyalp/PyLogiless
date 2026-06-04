@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.4.0] - 2026-06-04
+
+### 破壊的変更
+- `LogilessClient` 生成時に `merchant_id` を必須化。未指定の場合は `ValueError`
+  を送出（従来は `merchant/None/...` という不正URLへリクエストしていた）(#6)
+- 非冪等メソッド（POST など）の自動再試行を抑制。更新処理の二重実行を防ぐため、
+  通信例外での再試行は冪等メソッド（GET/HEAD/PUT/DELETE/OPTIONS/TRACE）に限定し、
+  ステータスコードによる再試行は非冪等メソッドでは 429/503 のみとした (#2)
+
+### バグ修正
+- `files` 指定時に `Content-Type: application/json` を固定していたため
+  multipart 送信が壊れる問題を修正。files 指定時は requests に委譲する (#8)
+- OAuth2 認可URLのクエリを URL エンコードするよう修正 (#5)
+- OAuth2 トークン取得・更新リクエストにタイムアウトを付与 (#9)
+- OAuth2 トークン応答に `access_token` が無い場合に成功扱いせず例外を送出 (#4)
+- `set_token` で `expires_in` 省略時に旧有効期限を引き継がないよう修正 (#3)
+
+### ドキュメント
+- README のテスト実行コマンドを実在するパスへ修正 (#7)
+
 ## [0.3.1] - 2026-06-04
 
 ### 変更点
