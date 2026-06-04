@@ -72,7 +72,16 @@ class LogilessClient:
             timeout (Union[int, float], optional): HTTPリクエストのタイムアウト秒数
             max_retries (int, optional): リトライ対象エラー時の最大再試行回数
             retry_delay (float, optional): 再試行間の待機秒数
+
+        Raises:
+            ValueError: merchant_id が未指定の場合（リソースのURLは
+                merchant/<merchant_id>/... 形式で構築されるため必須）
         """
+        if not merchant_id:
+            raise ValueError(
+                "merchant_id は必須です（APIエンドポイントが "
+                "merchant/<merchant_id>/... 形式のため）"
+            )
         self.api_base_url = api_base_url or self.API_BASE_URL
         self.timeout = timeout
         self.max_retries = max_retries
@@ -185,10 +194,11 @@ class LogilessClient:
             raise LogilessError(error_message)
 
         # ヘッダーの準備
-        request_headers = {
-            "Content-Type": "application/json",
-            **self.auth.get_auth_header(),
-        }
+        # files 指定時は multipart/form-data を requests に組み立てさせるため、
+        # Content-Type を固定しない（固定すると boundary が付かず送信が壊れる）。
+        request_headers = {**self.auth.get_auth_header()}
+        if files is None:
+            request_headers["Content-Type"] = "application/json"
         if headers:
             request_headers.update(headers)
 
